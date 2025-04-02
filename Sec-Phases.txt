@@ -1,0 +1,49 @@
+Initial Review
+
+        Scoping
+        Reconnaissance
+        Vulnerability identification
+        Reporting
+        
+Protocol fixes
+
+        Fixes issues
+        Retests and adds tests
+
+Mitigation Review
+
+        Reconnaissance
+        Vulnerability identification
+        Reporting
+        
+        
+---------------------------------------------------------------------
+
+
+Finding severity: Using the matrix Impact/Likelihood => (I)/(L)
+
+How to evaluate the impact of a finding
+
+* Impact refers to the potential harm or consequence to the users or the protocol due to the vulnerability.
+
+    High Impact:
+
+        Funds are directly or nearly directly at risk.
+
+        There's a severe disruption of protocol functionality or availability.
+
+    Medium Impact:
+
+        Funds are indirectly at risk.
+
+        There's some level of disruption to the protocol's functionality or availability.
+
+    Low Impact:
+
+        Funds are not at risk.
+
+        However, a function might be incorrect, the state might not be handled appropriately, etc.
+
+How to evaluate the likelihood of exploitation of a finding
+
+* Likelihood represents the probability of the impact occurring due to the vulnerability.
