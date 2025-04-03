@@ -1,0 +1,22 @@
+Exposed functions and vars
+
+enterRaffle
+refund 
+getActivePlayerIndex 
+selectWinner
+withdrawFees
+changeFeeAddress
+tokenURI
+
+
+Owner
+    - Deploy contract and set the entrance fee, raffle duration and the fee withdraw address
+        constructor()
+    - Can change the fee withdraw address
+        changeFeeAddress()
+
+All
+    - Can enter a address array to contest for de raffle (If a fee is payed for every array item)
+        enterRaffle(address[])
+    
+    refund([])
