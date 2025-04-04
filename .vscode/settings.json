@@ -1,0 +1,4 @@
+{
+    "solidity-language-server.trace.server.verbosity": "message",
+    "solidity.formatter": "forge"
+}

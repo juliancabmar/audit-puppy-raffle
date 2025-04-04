@@ -1,123 +1,97 @@
-### [H-1] All data on-chain is public data, so everyone can see `s_password` value.
+### [M-#] The For Loop on `Puppyraffle::enterRaffle` function is a potential denial of service (DoS) attack.
 
 **Description:**\
-The `PasswordStore::s_password` variable is intented to be private and can only accessed by `PasswordStore::getPassword` function, but (how it show below) the value can be read directly from the blockchain data.
-
-**Impact:**\
-Anyone can read the private password, severaly breaking the protocol's functionality.
-
-**Proof of Concept:**
-
-1. Running a local chain
-```bash
-$ anvil
-```
-
-2. Compile and Deploy the contract
-```bash
-$ make deploy
-```
-
-3. Get the storage slot #1 data (`s_password` data is on slot #1) for the deployed contract
-```bash
-$ cast storage [CONTRACT ADDRESS] 1
-```
-
-You'll get a result like this:\
-`0x6d7950617373776f726400000000000000000000000000000000000000000014` 
-
-4. Parse the hex-bytes32 result to string
-```bash
-$ cast parse-bytes32-string 0x6d7950617373776f726400000000000000000000000000000000000000000014
-```
-
-Getting the password value:\
-`myPassword`
-
-
-**Recommended Mitigation:**\
-The actual contract objetive can't be reached, because you can't store a plain text password on-chain without that can be reading by everyone. A viable solution could be encript the password off-chain before store it on-chain, but this implies an extra step by the user.
-
-<br>
-<hr>
-<br>
-
-### [H-2] `PasswordStore::setPassword` haven't access control, meaning a non-owner could set a password.
-
-**Description:**\
-The `PasswordStore:setPassword` function does not have any access verification mechanism that ensures only the owner can call it, this implies that everyone could set a password.
+The for loop inside the `Puppyraffle::enterRaffle` function runs through an increasing array of players searching for duplicate ones, opening the possibility that an attacker could pass player addresses multiple times, making the later calls more gas expensive than the earlier ones.  
 
 ```javascript
-function setPassword(string memory newPassword) external {
-@>  // @audit - There are not access controls
-    s_password = newPassword;
-    emit SetNetPassword();
-}
+@>  for (uint256 i = 0; i < players.length - 1; i++) {
+        for (uint256 j = i + 1; j < players.length; j++) {
+            require(
+                players[i] != players[j],
+                "PuppyRaffle: Duplicate player"
+            );
+        }
+    }
 ```
 
 **Impact:**\
-Anyone can set/change the current password of the contract, breaking severaly the intended contract functionality.   
+After the attack, the new costs of entering the raffle would discourage new real users.
 
 **Proof of Concept:**\
-Add the following to the `PasswordStore.t.sol`test file:
+If we have two sets of 100 players enter, the gas used will be as such:
+- 1st 100 players: ~6503269 gas
+- 2nd 100 players: ~18995097 gas
+
+The second set is ~3x more expensive than the first.
+
 <details>
-<summary>PoC test:</summary>
+<summary>PoC</summary>
+Place the following test into `test/PuppyRaffleTest.t.sol`.
 
 ```javascript
-function test_anyone_can_set_a_password(address anyone) public {
-    string memory pass = "any password";
-    vm.prank(anyone);
-    passwordStore.setPassword(pass);
+function testDoSEnterRaffle() public {
+    uint256 startGas;
+    uint256 gasUsedFirst;
+    uint256 gasUsedSecond;
+    uint256 numOfPlayers = 100;
+    address[] memory players = new address[](numOfPlayers);
 
-    vm.prank(address(owner));
-    string memory actualPassword = passwordStore.getPassword();
+    for (uint256 i = 0; i < numOfPlayers; i++) {
+        players[i] = address(uint160(i));
+    }
+    startGas = gasleft();
+    puppyRaffle.enterRaffle{value: entranceFee * numOfPlayers}(players);
+    gasUsedFirst = startGas - gasleft();
 
-    assertEq(pass, actualPassword);
+    for (uint256 i = 0; i < numOfPlayers; i++) {
+        players[i] = address(uint160(i + numOfPlayers));
+    }
+    startGas = gasleft();
+    puppyRaffle.enterRaffle{value: entranceFee * numOfPlayers}(players);
+    gasUsedSecond = startGas - gasleft();
+    console.log("Gas used on first enterRaffle() call: ", gasUsedFirst);
+    console.log("Gas used on second enterRaffle() call: ", gasUsedSecond);
+    assert(gasUsedFirst < gasUsedSecond);
 }
 ```
-
 </details>
-<br>
 
 **Recommended Mitigation:**\
-Add an access control condition on `PasswordStore::setPassword` function.
-```javascript
-function setPassword(string memory newPassword) external {
-    if (msg.sender != s_owner) {
-        revert PasswordStore__NotOwner();
-    }
-    s_password = newPassword;
-    emit SetNetPassword();
-}
-```
+1. Consider allow duplicate addresses, because users can make new wallet addresses anyways, so duplicate check doesn't prevent the same person from entering multiple times.
+2. Refactory the function code using a mapping instead of an array for check duplicates addresses.
 
-<br>
-<hr>
-<br>
-
-### [I-1] `PasswordStore::setPassword` function not take any parameters, but the related natspect indicated one. 
-
-**Description:**
-
-```javasccript
-* @notice This allows only the owner to retrieve the password.
-@>   * @param newPassword The new password to set.
-     */
-    function getPassword() external view returns (string memory) {
-        if (msg.sender != s_owner) {
-            revert PasswordStore__NotOwner();
-        }
-        return s_password;
-    }
-```
-
-The `PasswordStore::setPassword` function signature is `getPassword()`while the natspec says it should be `getPassword(string)`.
-
-**Impact:**\
-The natspec is incorrect.
-
-**Recommended Mitigation:**
+<details>
+<summary>Code example</summary>
 
 ```diff
-- * @param newPassword The new password to set.
+-   address[] public players;
++   mapping(address => bool) public players;
++   error Puppyraffle__NotDuplicateAddressAllowed(address duplicateAddress);
+
+    function enterRaffle(address[] memory newPlayers) public payable {
+        require(
+            msg.value == entranceFee * newPlayers.length,
+            "PuppyRaffle: Must send enough to enter raffle"
+        );
++       // Revert with the custom error if a duplicate address is found
+        for (uint256 i = 0; i < newPlayers.length; i++) {
+-           players.push(newPlayers[i]);
++           if (!players[newPlayers[i]]) {
++               revert Puppyraffle__NotDuplicateAddressAllowed(newPlayers[i]);
++           }
++           players[newPlayers[i]];
+        }
+
+-       // Check for duplicates
+-       // audit DoS
+-       for (uint256 i = 0; i < players.length - 1; i++) {
+-           for (uint256 j = i + 1; j < players.length; j++) {
+-               require(
+-                   players[i] != players[j],
+-                   "PuppyRaffle: Duplicate player"
+-               );
+-           }
+-       }
+        emit RaffleEnter(newPlayers);
+    }
 ```

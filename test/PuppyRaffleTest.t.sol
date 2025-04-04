@@ -16,11 +16,7 @@ contract PuppyRaffleTest is Test {
     uint256 duration = 1 days;
 
     function setUp() public {
-        puppyRaffle = new PuppyRaffle(
-            entranceFee,
-            feeAddress,
-            duration
-        );
+        puppyRaffle = new PuppyRaffle(entranceFee, feeAddress, duration);
     }
 
     //////////////////////
@@ -170,7 +166,7 @@ contract PuppyRaffleTest is Test {
         vm.warp(block.timestamp + duration + 1);
         vm.roll(block.number + 1);
 
-        uint256 expectedPayout = ((entranceFee * 4) * 80 / 100);
+        uint256 expectedPayout = (((entranceFee * 4) * 80) / 100);
 
         puppyRaffle.selectWinner();
         assertEq(address(playerFour).balance, balanceBefore + expectedPayout);
@@ -212,5 +208,35 @@ contract PuppyRaffleTest is Test {
         puppyRaffle.selectWinner();
         puppyRaffle.withdrawFees();
         assertEq(address(feeAddress).balance, expectedPrizeAmount);
+    }
+
+    //////////////
+    /// audits ///
+    //////////////
+
+    function testDoSEnterRaffle() public {
+        uint256 startGas;
+        uint256 gasUsedFirst;
+        uint256 gasUsedSecond;
+        uint256 numOfPlayers = 100;
+        address[] memory players = new address[](numOfPlayers);
+
+        for (uint256 i = 0; i < numOfPlayers; i++) {
+            players[i] = address(uint160(i));
+        }
+        startGas = gasleft();
+        puppyRaffle.enterRaffle{value: entranceFee * numOfPlayers}(players);
+        gasUsedFirst = startGas - gasleft();
+
+        for (uint256 i = 0; i < numOfPlayers; i++) {
+            players[i] = address(uint160(i + numOfPlayers));
+        }
+        startGas = gasleft();
+        puppyRaffle.enterRaffle{value: entranceFee * numOfPlayers}(players);
+        gasUsedSecond = startGas - gasleft();
+        console.log("Gas used on first enterRaffle() call: ", gasUsedFirst);
+        console.log("Gas used on second enterRaffle() call: ", gasUsedSecond);
+        assert(gasUsedFirst < gasUsedSecond);
+        console.log("The second call of enterRaffle() be most higer than se first");
     }
 }
