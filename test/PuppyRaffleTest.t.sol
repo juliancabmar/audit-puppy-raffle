@@ -270,7 +270,48 @@ contract PuppyRaffleTest is Test {
         console.log("Attacker contract end: ", endingAttackerContractBalance);
         console.log("Raffle contract end: ", endingRaffleContractBalance);
     }
+
+    function test_Audit_Overflow_TotalFees() public {
+        uint256 numOfPlayers;
+
+        // entering 92 players into the raffle
+
+        numOfPlayers = 92;
+        address[] memory playersA = new address[](numOfPlayers);
+        for (uint256 i = 0; i < numOfPlayers; i++) {
+            playersA[i] = address(uint160(i + 1));
+        }
+        puppyRaffle.enterRaffle{value: entranceFee * playersA.length}(playersA);
+
+        vm.warp(2 days);
+
+        puppyRaffle.selectWinner();
+        uint256 previousTotalFees = puppyRaffle.totalFees();
+        console.log("Total Fees of 92 players: ", previousTotalFees);
+
+        // now, entering 93 players into the raffle
+
+        numOfPlayers = 93;
+        address[] memory playersB = new address[](numOfPlayers);
+        for (uint256 i = 0; i < numOfPlayers; i++) {
+            playersB[i] = address(uint160(i + 1));
+        }
+        puppyRaffle.enterRaffle{value: entranceFee * playersB.length}(playersB);
+
+        vm.warp(4 days);
+
+        puppyRaffle.selectWinner();
+        uint256 lastTotalFees = puppyRaffle.totalFees();
+        console.log("Total Fees of 93 players: ", lastTotalFees);
+
+        // after the overflow the total fees of 93 players is less than the total fees of 92 players
+        assert(lastTotalFees < previousTotalFees);
+    }
 }
+
+////////////////////////////////
+// Audit - Auxiliar Contracts //
+////////////////////////////////
 
 contract ReentrancyAttacker {
     PuppyRaffle puppyRaffle;
