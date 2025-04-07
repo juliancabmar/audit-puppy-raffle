@@ -1,4 +1,151 @@
-## High
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    .full-page {
+        width:  100%;
+        height:  100vh; /* This will make the div take up the full viewport height */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    .full-page img {
+        max-width:  200;
+        max-height:  200;
+        margin-bottom: 5rem;
+    }
+    .full-page div{
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+</style>
+</head>
+<body>
+
+<div class="full-page">
+    <img src="./logo.jpeg" alt="Logo">
+    <div>
+    <h1>Puppy Raffle Audit Report</h1>
+    <h3>Prepared by: Julián Cabrera Marceglia</h3>
+    </div>
+</div>
+
+</body>
+</html>
+
+<!-- Your report starts here! -->
+
+# Puppy Raffle Audit Report
+
+### Prepared by: Julián Cabrera Marceglia
+Lead Auditors: 
+
+- Julián Cabrera Marceglia (https://github.com/juliancabmar)
+
+Assisting Auditors:
+
+- None
+
+# Table of contents
+<details>
+
+<summary>See table</summary>
+
+- [Puppy Raffle Audit Report](#puppy-raffle-audit-report)
+- [Table of contents](#table-of-contents)
+- [About Julián Cabrera Marceglia](#about-your_name_here)
+- [Disclaimer](#disclaimer)
+- [Risk Classification](#risk-classification)
+- [Audit Details](#audit-details)
+  - [Scope](#scope)
+- [Protocol Summary](#protocol-summary)
+  - [Roles](#roles)
+- [Executive Summary](#executive-summary)
+  - [Issues found](#issues-found)
+- [Findings](#findings)
+    - [High Risk Findings](#high-risk-findings)
+        - [H-1 Reentrancy attack in `PuppyRaffle::refund` function allown entrant to drain raffle balance](#h-1-reentrancy-attack-in-puppyrafflerefund-function-allown-entrant-to-drain-raffle-balance)
+        - [H-2 Weak randomness in `PuppyRaffle::selectWinner` function allows users to influence or predict the winner and influence or predict the winning puppy](#h-2-weak-randomness-in-puppyraffleselectwinner-function-allows-users-to-influence-or-predict-the-winner-and-influence-or-predict-the-winning-puppy)
+        - [H-3 Integer overflow on `PuppyRaffle::totalFees` loses fees](#h-3-integer-overflow-on-puppyraffletotalfees-loses-fees)
+    - [Medium Risk Findings](#medium-risk-findings)
+        - [M-1 The For Loop on `Puppyraffle::enterRaffle` function is a potential denial of service (DoS) attack](#m-1-the-for-loop-on-puppyraffleenteraffle-function-is-a-potential-denial-of-service-dos-attack)
+        - [M-2 Unsafe cast of `PuppyRaffle::fee` loses fees](#m-2-unsafe-cast-of-puppyrafflefee-loses-fees)
+        - [M-3 Smart contract wallets raffle winners without a `receive` or `fallback` function will block the start of a new contest](#m-3-smart-contract-wallets-raffle-winners-without-a-receive-or-fallback-function-will-block-the-start-of-a-new-contest)
+    - [Low Risk Findings](#low-risk-findings)
+        - [L-1 On `PuppyRaffle::getActivePlayerIndex`, if zero is the index of the first address in the players array, so the user 0 may think what is not active](#l-1-on-puppyrafflegetactiveplayerindex-if-zero-is-the-index-of-the-first-address-in-the-players-array-so-the-user-0-may-think-what-is-not-active)
+    - [Gas Optimizations](#gas-optimizations)
+        - [G-1 Unchanged state variables should be declared constant or immutable](#g-1-unchanged-state-variables-should-be-declared-constant-or-immutable)
+        - [G-2 Storage Array Length not Cached](#g-2-storage-array-length-not-cached)
+    - [Informational](#informational)
+        - [I-1 Unspecific Solidity Pragma](#i-1-unspecific-solidity-pragma)
+        - [I-2 Using an outdated version of Solidity is not recommended](#i-2-using-an-outdated-version-of-solidity-is-not-recommended)
+        - [I-3 Address State Variable Set Without Checks](#i-3-address-state-variable-set-without-checks)
+        - [I-4 `PuppyRaffle::selectWinner` does not follow CEI, which is not a best practice](#i-4-puppyraffleselectwinner-does-not-follow-cei-which-is-not-a-best-practice)
+        - [I-5 Using magic numbers is discouraged](#i-5-using-magic-numbers-is-discouraged)
+        - [I-6 _isActivePlayer is never used and should be removed](#i-6-_isactiveplayer-is-never-used-and-should-be-removed)
+</details>
+</br>
+
+# About Julián Cabrera Marceglia
+
+I am a security researcher who want to make the web3 enviroment safer.
+
+# Disclaimer
+
+The Julián Cabrera Marceglia team makes all effort to find as many vulnerabilities in the code in the given time period, but holds no responsibilities for the the findings provided in this document. A security audit by the team is not an endorsement of the underlying business or product. The audit was time-boxed and the review of the code was solely on the security aspects of the solidity implementation of the contracts.
+
+# Risk Classification
+
+|            |        | Impact |        |     |
+| ---------- | ------ | ------ | ------ | --- |
+|            |        | High   | Medium | Low |
+|            | High   | H      | H/M    | M   |
+| Likelihood | Medium | H/M    | M      | M/L |
+|            | Low    | M      | M/L    | L   |
+
+# Audit Details
+
+**The findings described in this document correspond the following commit hash:**
+```
+2a47715b30cf11ca82db148704e67652ad679cd8
+```
+
+## Scope 
+
+```
+src/
+--- PuppyRaffle.sol
+```
+
+# Protocol Summary 
+
+PasswordStore is a protocol dedicated to storage and retrieval of a user's passwords. The protocol is designed to be used by a single user, and is not designed to be used by multiple users. Only the owner should be able to set and access this password. 
+
+## Roles
+
+- Owner - Deployer of the protocol, has the power to change the wallet address to which fees are sent through the changeFeeAddress function.
+- Player - Participant of the raffle, has the power to enter the raffle with the enterRaffle function and refund value through refund function.
+
+# Executive Summary
+
+## Issues found
+
+| Severity          | Number of issues found |
+| ----------------- | ---------------------- |
+| High              | 3                      |
+| Medium            | 3                      |
+| Low               | 1                      |
+| Info              | 6                      |
+| Gas Optimizations | 2                      |
+| Total             | 15                     |
+
+# Findings
+
+## High Risk Findings
 
 ### [H-1] Reentrancy attack in `PuppyRaffle::refund` function allown entrant to drain raffle balance
 
@@ -250,7 +397,7 @@ We additionally want to bring your attention to another attack vector as a resul
 
 
 
-## Medium
+## Medium Risk Findings
 
 ### [M-1] The For Loop on `Puppyraffle::enterRaffle` function is a potential denial of service (DoS) attack.
 
@@ -442,7 +589,7 @@ There are a few options to mitigate this issue.
 1. Do not allow smart contract wallet entrants (not recommended)
 2. Create a mapping of addresses -> payout so winners can pull their funds out themselves, putting the owness on the winner to claim their prize. (Recommended)
 
-## Low
+## Low Risk Findings
 
 ### [L-1] On `PuppyRaffle::getActivePlayerIndex`, if zero is the index of the first address in the players array, so the user 0 may think what is not active.
 
@@ -473,7 +620,7 @@ A player at index 0 may incorrectly think they have not entered the raffle, and 
 If the function not find a active player can may return "-1" instead of "0", or a better approach will be, revert the txn with a `PuppyRaffle__UserIsNotActive` custom error.
 
 
-## Gas
+## Gas Optimizations
 
 ### [G-1] Unchanged state variables should be declared constant or immutable.
 
