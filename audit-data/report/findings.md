@@ -1,3 +1,5 @@
+## High
+
 ### [H-1] Reentrancy attack in `PuppyRaffle::refund` function allown entrant to drain raffle balance
 
 **Description:**\
@@ -225,6 +227,37 @@ function testDoSEnterRaffle() public {
 ```
 </details>
 
+## Low
+
+### [L-1] On `PuppyRaffle::getActivePlayerIndex`, if zero is the index of the first address in the players array, so the user 0 may think what is not active.
+
+**Description:**\
+`PuppyRaffle::getActivePlayerIndex` returns the same "0" output for an non-existed player and for the one who have `players[0]` array index.
+
+```javascript
+function getActivePlayerIndex(address player) external view returns (uint256) {
+    for (uint256 i = 0; i < players.length; i++) {
+        if (players[i] == player) {
+            return i;
+        }
+    }
+    return 0;
+}
+```
+
+**Impact:**\
+A player at index 0 may incorrectly think they have not entered the raffle, and attempt to enter the raffle again, wasting gas.
+
+**Proof of Concept:**
+
+1. User enters the raffle, they are the first entrant
+2. `PuppyRaffle::getActivePlayerIndex` return 0
+3. User thinks they have not entered correctly due to the function documentation
+
+**Recommended Mitigation:**\
+If the function not find a active player can may return "-1" instead of "0", or a better approach will be, revert the txn with a `PuppyRaffle__UserIsNotActive` custom error.
+
+
 ## Gas
 
 ### [G-1] Unchanged state variables should be declared constant or immutable.
@@ -335,3 +368,16 @@ Check for `address(0)` when assigning values to address state variables.
     ```
 
 </details>
+
+### [I-4] `PuppyRaffle::selectWinner` does not follow CEI, which is not a best practice
+
+It's best to keep the code clean and follow CEI (Check, Effects, Interactions)
+
+```diff
+-   (bool success,) = winner.call{value: prizePool}("");
+-   require(success, "PuppyRaffle: Failed to send prize pool to winner");
+    _safeMint(winner, tokenId);
++   (bool success,) = winner.call{value: prizePool}("");
++   require(success, "PuppyRaffle: Failed to send prize pool to winner");
+ 
+```
